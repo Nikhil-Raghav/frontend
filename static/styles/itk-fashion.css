@@ -475,6 +475,29 @@ a:hover { color: var(--fs-accent-dark); }
 .fs-contact-item h3 { font-size: 0.9rem; font-weight: 700; color: var(--fs-accent-dark); margin-bottom: 4px; }
 .fs-contact-item p { color: var(--fs-muted); font-size: 0.88rem; margin: 0; }
 
+/* ── Add to Cart Button ──────────────────────────────────────── */
+.fs-add-cart-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 0;
+  background: var(--fs-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: background var(--fs-ease), transform var(--fs-ease);
+  font-family: 'Quicksand', 'DM Sans', sans-serif;
+}
+.fs-add-cart-btn:hover {
+  background: var(--fs-accent-dark);
+  transform: translateY(-1px);
+}
+.fs-add-cart-btn i { margin-right: 5px; }
+
 /* ── AOS base (fallback) ─────────────────────────────────────── */
 [data-aos] { opacity: 0; transition: opacity 0.6s ease, transform 0.6s ease; }
 [data-aos="fade-up"] { transform: translateY(30px); }
