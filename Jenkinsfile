@@ -9,7 +9,7 @@ pipeline {
 
         stage('Git Checkout') {
             steps {
-                git url: 'https://github.com/ManojKRISHNAPPA/Microservice.git', branch: 'main'
+                git url: 'https://github.com/ITkannadigaru/frontend.git', branch: 'main'
             }
         }
 
