@@ -26,6 +26,7 @@ The **Frontend** is the user-facing HTTP server for the Online Boutique microser
 - [Backend Service Connections](#backend-service-connections)
 - [Environment Variables](#environment-variables)
 - [Running Locally](#running-locally)
+- [Dockerfile](#dockerfile)
 
 ---
 
@@ -340,3 +341,90 @@ go run .
 ```
 
 The server will start on `http://localhost:8080`.
+
+---
+
+## Dockerfile
+
+The Dockerfile uses a **multi-stage build** to produce a tiny, secure production image.
+
+```dockerfile
+FROM golang:1.25.6-alpine AS builder
+```
+Stage 1 starts from the official Go 1.25.6 image on Alpine Linux (a minimal Linux distro). This stage is named `builder` so the second stage can copy from it. Alpine is used only for compilation — it never ships to production.
+
+```dockerfile
+WORKDIR /src
+```
+Sets the working directory inside the builder container to `/src`.
+
+```dockerfile
+COPY go.mod go.sum ./
+RUN go mod download
+```
+Copies only the module files first and downloads all dependencies **before** copying source code. This is a **Docker layer caching optimisation** — if your Go source changes but `go.mod`/`go.sum` don't, Docker reuses the cached dependency layer and skips the download on the next rebuild.
+
+```dockerfile
+COPY . .
+```
+Copies the entire source code into `/src`.
+
+```dockerfile
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /go/bin/frontend .
+```
+Compiles the Go binary. The flags mean:
+- `CGO_ENABLED=0` — disables C interop, producing a **fully static binary** with no external `.so` dependencies.
+- `GOOS=linux GOARCH=amd64` — cross-compiles for Linux on 64-bit x86 (important if building on macOS or ARM).
+- `-ldflags="-s -w"` — strips the symbol table (`-s`) and DWARF debug info (`-w`), making the binary significantly smaller.
+- `-o /go/bin/frontend` — output path of the compiled binary.
+
+---
+
+```dockerfile
+FROM gcr.io/distroless/static
+```
+Stage 2 starts a **brand new, minimal image** from Google's Distroless project. `distroless/static` contains only the bare minimum to run a statically-linked binary — no shell, no package manager, no utilities. This makes the final image very small and dramatically reduces the attack surface.
+
+```dockerfile
+WORKDIR /src
+```
+Sets the working directory in the final image.
+
+```dockerfile
+COPY --from=builder /go/bin/frontend /src/server
+COPY ./templates ./templates
+COPY ./static ./static
+```
+Copies only what is needed to run the app from the builder stage:
+- The compiled binary → `/src/server`
+- The `templates/` folder (HTML templates the server reads at runtime)
+- The `static/` folder (CSS, images, icons served to the browser)
+
+The entire Go toolchain and source code from Stage 1 are **discarded** — they never make it into the final image.
+
+```dockerfile
+ENV GOTRACEBACK=single
+```
+Configures Go's runtime crash behaviour. `single` means if the app panics, only the stack trace of the crashing goroutine is printed (not all goroutines). This is also used by **Skaffold's debug mode** to detect that this is a Go binary.
+
+```dockerfile
+EXPOSE 8080
+```
+Documents that the container listens on port 8080. This is informational — it does not actually open the port; you still need `-p 8080:8080` when running with `docker run`.
+
+```dockerfile
+ENTRYPOINT ["/src/server"]
+```
+Sets the compiled binary as the process that runs when the container starts.
+
+---
+
+### Why two stages?
+
+| | Stage 1 (builder) | Stage 2 (runtime) |
+|---|---|---|
+| Base image | `golang:1.25.6-alpine` (~250 MB) | `distroless/static` (~2 MB) |
+| Contains | Go compiler, source code, modules | Only the binary + templates + static files |
+| Shipped to production? | No — discarded after build | Yes — this is the final image |
+
+The result is a **tiny, secure production image** containing nothing except what the application needs to run.
